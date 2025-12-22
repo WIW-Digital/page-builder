@@ -1,105 +1,89 @@
 <?php
-// 1. SETTING ERROR REPORTING (Biar gak langsung Error 500 kalau ada salah)
-ini_set('display_errors', 1);
-ini_set('display_startup_errors', 1);
-error_reporting(E_ALL);
+// 1. SETTING NAMA FILE
+$db_file = 'data.json';
 
-$database = 'data.json';
-
-// 2. CEK & BUAT DATABASE JSON
-if (!file_exists($database)) {
-    file_put_contents($database, json_encode([], JSON_PRETTY_PRINT));
+// 2. LOGIKA PENYELAMAT (Biar data muncul)
+if (!file_exists($db_file)) {
+    file_put_contents($db_file, json_encode([], JSON_PRETTY_PRINT));
 }
 
-$all_pages = json_decode(file_get_contents($database), true) ?: [];
+// Ambil isi file
+$raw_content = file_get_contents($db_file);
+$all_pages = json_decode($raw_content, true);
 
-// 3. LOGIKA SIMPAN DATA
-if (isset($_POST['save'])) {
-    // Bersihkan slug (hanya huruf, angka, dan minus)
-    $slug = preg_replace('/[^a-z0-9-]/', '', strtolower($_POST['slug']));
-    
-    if (!empty($slug)) {
-        $all_pages[$slug] = [
-            "slug"   => $slug,
-            "judul"  => $_POST['judul'],
-            "konten" => $_POST['konten'] // Simpan mentah agar tag HTML tidak rusak
-        ];
-
-        if (file_put_contents($database, json_encode($all_pages, JSON_PRETTY_PRINT))) {
-            header("Location: ./" . $slug);
-            exit;
-        } else {
-            die("Error: Gagal nulis ke data.json. Cek permission file lo!");
-        }
-    }
+// Kalau JSON rusak atau isinya bukan array, paksa jadi array kosong
+if (!is_array($all_pages)) {
+    $all_pages = [];
 }
 
-// 4. LOGIKA TAMPILKAN HALAMAN (VIEWER)
-$page_id = $_GET['page'] ?? null;
-if ($page_id && isset($all_pages[$page_id])) {
-    $site = $all_pages[$page_id];
-
-    // PAKSA BROWSER JALANIN HTML (Biar gak jadi Plain Text)
+// --- 3. LOGIKA VIEWER (Tampilkan Halaman) ---
+$slug = isset($_GET['page']) ? trim($_GET['page'], '/') : null;
+if ($slug && isset($all_pages[$slug])) {
     header("Content-Type: text/html; charset=UTF-8");
-    
-    // Keluarin konten mentah (Raw HTML)
-    echo $site['konten']; 
+    echo $all_pages[$slug]['konten'];
     exit;
 }
+
+// --- 4. LOGIKA SIMPAN ---
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['slug'])) {
+    $custom_slug = preg_replace('/[^a-z0-9-]/', '', strtolower($_POST['slug']));
+    
+    if ($custom_slug) {
+        // Masukkan data baru ke array yang sudah ada (biar gak ketimpa semua)
+        $all_pages[$custom_slug] = [
+            "judul" => htmlspecialchars($_POST['judul']),
+            "konten" => $_POST['konten'], 
+            "updated" => date("Y-m-d H:i")
+        ];
+        
+        // Simpan SEMUA data balik ke data.json
+        file_put_contents($db_file, json_encode($all_pages, JSON_PRETTY_PRINT));
+        
+        // Refresh dashboard
+        header("Location: index.php"); 
+        exit;
+    }
+}
 ?>
+
 <!DOCTYPE html>
 <html lang="id">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Mini Site Builder - Dashboard</title>
+    <title>NGID Web Builder Dashboard</title>
     <style>
-        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #eef2f3; color: #333; margin: 0; padding: 20px; }
-        .container { max-width: 900px; margin: 0 auto; background: #fff; padding: 30px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
-        h1 { color: #2c3e50; border-bottom: 2px solid #3498db; padding-bottom: 10px; }
-        label { font-weight: bold; display: block; margin-top: 15px; }
-        input[type="text"], textarea { width: 100%; padding: 12px; margin-top: 5px; border: 1px solid #ccc; border-radius: 6px; box-sizing: border-box; font-size: 14px; }
-        textarea { height: 350px; font-family: 'Courier New', Courier, monospace; background: #272822; color: #f8f8f2; }
-        button { background: #3498db; color: white; border: none; padding: 12px 25px; border-radius: 6px; cursor: pointer; font-size: 16px; margin-top: 20px; transition: 0.3s; }
-        button:hover { background: #2980b9; }
-        .list-section { margin-top: 40px; border-top: 1px solid #eee; padding-top: 20px; }
-        .web-card { background: #f9f9f9; padding: 10px; border-left: 4px solid #3498db; margin-bottom: 10px; }
-        a { color: #3498db; text-decoration: none; }
-        a:hover { text-decoration: underline; }
+        body { font-family: sans-serif; background: #111; color: #fff; padding: 20px; }
+        .container { max-width: 900px; margin: 0 auto; display: flex; gap: 20px; }
+        .box { background: #222; padding: 20px; border-radius: 8px; flex: 1; border: 1px solid #444; }
+        input, textarea { width: 100%; padding: 10px; margin: 10px 0; background: #000; color: #0f0; border: 1px solid #444; border-radius: 4px; box-sizing: border-box; }
+        textarea { height: 200px; }
+        button { width: 100%; padding: 10px; background: #007bff; color: #fff; border: none; cursor: pointer; border-radius: 4px; font-weight: bold; }
+        .card { background: #333; padding: 10px; margin-top: 10px; border-radius: 4px; border-left: 4px solid #007bff; }
+        a { color: #00d4ff; text-decoration: none; }
     </style>
 </head>
 <body>
 
 <div class="container">
-    <h1>🚀 Website Engine</h1>
-    <p>Paste kode HTML lengkap lo (termasuk tag &lt;html&gt;, &lt;head&gt;, &lt;body&gt;) untuk menerbitkan halaman baru.</p>
+    <div class="box">
+        <h3>➕ Buat Halaman</h3>
+        <form method="POST">
+            <input type="text" name="judul" placeholder="Judul" required>
+            <input type="text" name="slug" placeholder="Slug (misal: bio)" required>
+            <textarea name="konten" placeholder="Kode HTML..." required></textarea>
+            <button type="submit">SIMPAN</button>
+        </form>
+    </div>
 
-    <form method="POST">
-        <label>Judul Project:</label>
-        <input type="text" name="judul" placeholder="Contoh: My Landing Page" required>
-
-        <label>URL Slug (Nama URL):</label>
-        <input type="text" name="slug" placeholder="misal: web-gue" required>
-
-        <label>Kode HTML Konten:</label>
-        <textarea name="konten" placeholder="<html>
-<body>
-  <h1>Hello World!</h1>
-</body>
-</html>" required></textarea>
-
-        <button type="submit" name="save">Terbitkan Website</button>
-    </form>
-
-    <div class="list-section">
-        <h3>Daftar Website Terbit:</h3>
-        <?php if (empty($all_pages)): ?>
-            <p style="color: #999;">Belum ada website yang dibuat.</p>
+    <div class="box">
+        <h3>📂 Daftar Halaman (Total: <?= count($all_pages) ?>)</h3>
+        <?php if(empty($all_pages)): ?>
+            <p style="color: #888;">Data masih kosong di data.json</p>
         <?php else: ?>
-            <?php foreach ($all_pages as $slug => $data): ?>
-                <div class="web-card">
-                    <strong><?= htmlspecialchars($data['judul']) ?></strong><br>
-                    Link: <a href="./<?= $slug ?>" target="_blank">/<?= $slug ?></a>
+            <?php foreach (array_reverse($all_pages, true) as $s => $p): ?>
+                <div class="card">
+                    <strong><?= htmlspecialchars($p['judul']) ?></strong><br>
+                    <a href="./<?= $s ?>" target="_blank">ngid.my.id/<?= $s ?></a>
                 </div>
             <?php endforeach; ?>
         <?php endif; ?>
