@@ -50,7 +50,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['slug'])) {
 <html lang="id">
 <head>
     <meta charset="UTF-8">
-    <title>NGID Web Builder Dashboard</title>
+    <title>Web Builder Dashboard</title>
     <style>
         body { font-family: sans-serif; background: #111; color: #fff; padding: 20px; }
         .container { max-width: 900px; margin: 0 auto; display: flex; gap: 20px; }
