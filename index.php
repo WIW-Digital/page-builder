@@ -1,89 +1,115 @@
 <?php
-// 1. SETTING NAMA FILE
+/**
+ * Webpage Builder - A lightweight JSON-based Flat-File CMS.
+ * Ideal for low-resource servers (1 Core CPU / 2GB RAM).
+ */
+
 $db_file = 'data.json';
 
-// 2. LOGIKA PENYELAMAT (Biar data muncul)
+// Initialize JSON database if it doesn't exist
 if (!file_exists($db_file)) {
     file_put_contents($db_file, json_encode([], JSON_PRETTY_PRINT));
 }
 
-// Ambil isi file
-$raw_content = file_get_contents($db_file);
-$all_pages = json_decode($raw_content, true);
+// Fetch data from storage
+$raw_data = file_get_contents($db_file);
+$all_pages = json_decode($raw_data, true) ?: [];
 
-// Kalau JSON rusak atau isinya bukan array, paksa jadi array kosong
-if (!is_array($all_pages)) {
-    $all_pages = [];
-}
-
-// --- 3. LOGIKA VIEWER (Tampilkan Halaman) ---
+// --- VIEW LOGIC (Routing) ---
 $slug = isset($_GET['page']) ? trim($_GET['page'], '/') : null;
-if ($slug && isset($all_pages[$slug])) {
-    header("Content-Type: text/html; charset=UTF-8");
-    echo $all_pages[$slug]['konten'];
-    exit;
+
+if ($slug) {
+    if (isset($all_pages[$slug])) {
+        header("Content-Type: text/html; charset=UTF-8");
+        echo $all_pages[$slug]['content'];
+        exit;
+    } else {
+        // Fallback to custom 404 page if slug is not found
+        http_response_code(404);
+        if (file_exists('404.shtml')) {
+            include('404.shtml');
+        } else {
+            echo "<h1 style='color:white; background:#000; padding:20px;'>404 - Content Gone or Never Existed.</h1>";
+        }
+        exit;
+    }
 }
 
-// --- 4. LOGIKA SIMPAN ---
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['slug'])) {
-    $custom_slug = preg_replace('/[^a-z0-9-]/', '', strtolower($_POST['slug']));
+// --- SAVE LOGIC (Create/Update) ---
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['slug_input'])) {
+    // Basic sanitization for the slug
+    $s = preg_replace('/[^a-z0-9-]/', '', strtolower($_POST['slug_input']));
     
-    if ($custom_slug) {
-        // Masukkan data baru ke array yang sudah ada (biar gak ketimpa semua)
-        $all_pages[$custom_slug] = [
-            "judul" => htmlspecialchars($_POST['judul']),
-            "konten" => $_POST['konten'], 
-            "updated" => date("Y-m-d H:i")
+    if ($s) {
+        $all_pages[$s] = [
+            "title" => htmlspecialchars($_POST['title_input']),
+            "content" => $_POST['content_input'], // Raw HTML stored here
+            "updated" => date("d M Y, H:i")
         ];
         
-        // Simpan SEMUA data balik ke data.json
+        // Save back to JSON
         file_put_contents($db_file, json_encode($all_pages, JSON_PRETTY_PRINT));
         
-        // Refresh dashboard
-        header("Location: index.php"); 
+        header("Location: index.php?status=published");
         exit;
     }
 }
 ?>
 
 <!DOCTYPE html>
-<html lang="id">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Web Builder Dashboard</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NGID Web Builder | Dashboard</title>
     <style>
-        body { font-family: sans-serif; background: #111; color: #fff; padding: 20px; }
-        .container { max-width: 900px; margin: 0 auto; display: flex; gap: 20px; }
-        .box { background: #222; padding: 20px; border-radius: 8px; flex: 1; border: 1px solid #444; }
-        input, textarea { width: 100%; padding: 10px; margin: 10px 0; background: #000; color: #0f0; border: 1px solid #444; border-radius: 4px; box-sizing: border-box; }
-        textarea { height: 200px; }
-        button { width: 100%; padding: 10px; background: #007bff; color: #fff; border: none; cursor: pointer; border-radius: 4px; font-weight: bold; }
-        .card { background: #333; padding: 10px; margin-top: 10px; border-radius: 4px; border-left: 4px solid #007bff; }
-        a { color: #00d4ff; text-decoration: none; }
+        :root { --primary: #00d4ff; --bg: #0a0a0a; --card: #161616; --text: #d1d1d1; }
+        body { font-family: 'Segoe UI', Tahoma, sans-serif; background: var(--bg); color: var(--text); margin: 0; padding: 20px; }
+        .container { max-width: 1100px; margin: 0 auto; display: flex; gap: 20px; flex-wrap: wrap; }
+        .editor-box { flex: 1.2; min-width: 350px; background: var(--card); padding: 25px; border-radius: 12px; border: 1px solid #333; }
+        .list-box { flex: 0.8; min-width: 300px; background: var(--card); padding: 25px; border-radius: 12px; border: 1px solid #333; }
+        h2 { margin-top: 0; color: var(--primary); border-bottom: 1px solid #333; padding-bottom: 10px; font-size: 1.5rem; }
+        input, textarea { width: 100%; padding: 12px; margin: 10px 0; background: #000; border: 1px solid #444; color: #00ff00; border-radius: 6px; box-sizing: border-box; font-family: 'Consolas', monospace; }
+        textarea { height: 350px; resize: vertical; }
+        button { background: #007bff; color: white; border: none; padding: 15px; border-radius: 6px; cursor: pointer; font-weight: bold; width: 100%; transition: 0.3s; }
+        button:hover { background: #0056b3; }
+        .card { background: #222; padding: 15px; border-radius: 8px; margin-bottom: 12px; border-left: 5px solid var(--primary); position: relative; }
+        .card strong { display: block; color: #fff; margin-bottom: 5px; }
+        .card a { color: var(--primary); text-decoration: none; font-size: 14px; }
+        .card a:hover { text-decoration: underline; }
+        .card .time { font-size: 10px; color: #666; margin-top: 8px; }
+        .status-msg { background: #1b5e20; color: #fff; padding: 10px; border-radius: 6px; margin-bottom: 15px; font-size: 14px; }
     </style>
 </head>
 <body>
 
 <div class="container">
-    <div class="box">
-        <h3>➕ Buat Halaman</h3>
+    <div class="editor-box">
+        <h2>Web Builder Engine</h2>
+        <?php if(isset($_GET['status'])): ?>
+            <div class="status-msg">✔ Page successfully published!</div>
+        <?php endif; ?>
         <form method="POST">
-            <input type="text" name="judul" placeholder="Judul" required>
-            <input type="text" name="slug" placeholder="Slug (misal: bio)" required>
-            <textarea name="konten" placeholder="Kode HTML..." required></textarea>
-            <button type="submit">SIMPAN</button>
+            <input type="text" name="title_input" placeholder="Page Title" required>
+            <input type="text" name="slug_input" placeholder="URL Slug (e.g., promo-2025)" required>
+            <textarea name="content_input" placeholder="Paste your HTML/CSS/JS code here..." required></textarea>
+            <button type="submit">Publish Changes</button>
         </form>
     </div>
 
-    <div class="box">
-        <h3>📂 Daftar Halaman (Total: <?= count($all_pages) ?>)</h3>
-        <?php if(empty($all_pages)): ?>
-            <p style="color: #888;">Data masih kosong di data.json</p>
+    <div class="list-box">
+        <h2>Live Pages</h2>
+        <div style="font-size: 12px; color: #666; margin-bottom: 15px;">Inventory: <?= count($all_pages) ?> Published Items</div>
+        <?php if (empty($all_pages)): ?>
+            <p style="color:#444">Database is empty. Start building!</p>
         <?php else: ?>
-            <?php foreach (array_reverse($all_pages, true) as $s => $p): ?>
+            <?php 
+            $display_list = array_reverse($all_pages, true);
+            foreach ($display_list as $s => $p): ?>
                 <div class="card">
-                    <strong><?= htmlspecialchars($p['judul']) ?></strong><br>
-                    <a href="./<?= $s ?>" target="_blank">ngid.my.id/<?= $s ?></a>
+                    <strong><?= htmlspecialchars($p['title']) ?></strong>
+                    <a href="./<?= $s ?>" target="_blank">view page: /<?= $s ?></a>
+                    <div class="time">Last Update: <?= $p['updated'] ?></div>
                 </div>
             <?php endforeach; ?>
         <?php endif; ?>
